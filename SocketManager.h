@@ -62,6 +62,17 @@ public:
             mIoServiceThreads->create_thread(boost::bind(&SocketManager::WorkerThreadFn, this));
         }
     }
+
+    boost::mutex* GetStreamLock()
+    {
+        return &mStreamLock;
+    }
+
+    boost::recursive_mutex* GetResourceLock()
+    {
+        return &mResourceLock;
+    }
+
 private:
 
     void WorkerThreadFn();

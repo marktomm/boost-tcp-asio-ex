@@ -23,38 +23,46 @@ TcpIpPort::TcpIpPort(char* name, SocketManager* sm, PortType type, uint16_t buf_
 
 void TcpIpPort::Start()
 {
-    switch(mType)
+    try
     {
-    case CLIENT:
-    {
-        boost::asio::ip::tcp::resolver resolver( mpManager->GetIoService() );
-        boost::asio::ip::tcp::resolver::query query(
-            mAddress.c_str(),
-            boost::lexical_cast< std::string >( mPort )
-        );
-        boost::asio::ip::tcp::resolver::iterator iterator = resolver.resolve( query );
-        boost::asio::ip::tcp::endpoint endpoint = *iterator;
+        switch(mType)
+        {
+        case CLIENT:
+        {
+            boost::asio::ip::tcp::resolver resolver( mpManager->GetIoService() );
+            boost::asio::ip::tcp::resolver::query query(
+                mAddress.c_str(),
+                boost::lexical_cast< std::string >( mPort )
+            );
+            boost::asio::ip::tcp::resolver::iterator iterator = resolver.resolve( query );
+            boost::asio::ip::tcp::endpoint endpoint = *iterator;
 
-        mSocket.async_connect( endpoint, boost::bind( &TcpIpPort::OnConnect, shared_from_this(), _1) );
+            mSocket.async_connect( endpoint, boost::bind( &TcpIpPort::OnConnect, shared_from_this(), _1) );
 
-        break;
+            break;
+        }
+        case SERVER:
+        {
+            boost::asio::ip::tcp::resolver resolver( mpManager->GetIoService() );
+            boost::asio::ip::tcp::resolver::query query(
+                mAddress.c_str(),
+                boost::lexical_cast< std::string >( mPort )
+            );
+            boost::asio::ip::tcp::endpoint endpoint = *resolver.resolve( query );
+            mAcceptor.open( endpoint.protocol() );
+            mAcceptor.set_option( boost::asio::ip::tcp::acceptor::reuse_address( false ) );
+            mAcceptor.bind( endpoint );
+            mAcceptor.listen( boost::asio::socket_base::max_connections );
+            mAcceptor.async_accept( mSocket, boost::bind( &TcpIpPort::OnAccept, shared_from_this(), _1) );
+
+            break;
+        }
+        }
     }
-    case SERVER:
+    catch(std::exception& ex)
     {
-        boost::asio::ip::tcp::resolver resolver( mpManager->GetIoService() );
-        boost::asio::ip::tcp::resolver::query query(
-            mAddress.c_str(),
-            boost::lexical_cast< std::string >( mPort )
-        );
-        boost::asio::ip::tcp::endpoint endpoint = *resolver.resolve( query );
-        mAcceptor.open( endpoint.protocol() );
-        mAcceptor.set_option( boost::asio::ip::tcp::acceptor::reuse_address( false ) );
-        mAcceptor.bind( endpoint );
-        mAcceptor.listen( boost::asio::socket_base::max_connections );
-        mAcceptor.async_accept( mSocket, boost::bind( &TcpIpPort::OnAccept, shared_from_this(), _1) );
-
-        break;
-    }
+        boost::lock_guard<boost::mutex> lock(*mpManager->GetStreamLock());
+        std::cout << "TcpIpPort Start exception: " << ex.what();
     }
 }
 
@@ -73,7 +81,7 @@ void TcpIpPort::GenerateMessage()
         mBuffWrite += alphanum[rand() % (sizeof(alphanum) - 1)];;
     }
 
-    boost::lock_guard<boost::mutex> lock(mStreamLock);
+    boost::lock_guard<boost::mutex> lock(*mpManager->GetStreamLock());
     std::cout << mName << " : ""[" << boost::this_thread::get_id() << "]" <<  "Message generated: " << mBuffWrite << std::endl;
 }
 
@@ -81,7 +89,7 @@ void TcpIpPort::OnConnect(const boost::system::error_code & ec)
 {
     if( ec )
     {
-        boost::lock_guard<boost::mutex> lock(mStreamLock);
+        boost::lock_guard<boost::mutex> lock(*mpManager->GetStreamLock());
         std::cout << mName << " : ""[" << boost::this_thread::get_id() << "]" << "TcpIpPort OnConnect error: " << ec << std::endl;
         mSocket.close();
     }
@@ -125,7 +133,7 @@ void TcpIpPort::ClientOnWrite(const boost::system::error_code & ec, size_t bytes
 {
     if(ec)
     {
-        boost::lock_guard<boost::mutex> lock(mStreamLock);
+        boost::lock_guard<boost::mutex> lock(*mpManager->GetStreamLock());
         std::cout << mName << " : ""[" << boost::this_thread::get_id() << "]" <<  "TcpIpPort ClientOnWrite error: " << ec << std::endl;
         mSocket.close();
     }
@@ -163,7 +171,7 @@ void TcpIpPort::ClientOnRead(const boost::system::error_code & ec, size_t bytes)
 {
     if(ec)
     {
-        boost::lock_guard<boost::mutex> lock(mStreamLock);
+        boost::lock_guard<boost::mutex> lock(*mpManager->GetStreamLock());
         std::cout << mName << " : ""[" << boost::this_thread::get_id() << "]" <<  "TcpIpPort ClientOnWrite error: " << ec << std::endl;
         mSocket.close();
     }
@@ -193,7 +201,7 @@ void TcpIpPort::OnAccept(const boost::system::error_code & ec)
 {
     if( ec )
     {
-        boost::lock_guard<boost::mutex> lock(mStreamLock);
+        boost::lock_guard<boost::mutex> lock(*mpManager->GetStreamLock());
         std::cout << mName << " : ""[" << boost::this_thread::get_id() << "]" <<  "TcpIpPort OnAccept error: " << ec << std::endl;
         mSocket.close();
     }
@@ -220,7 +228,7 @@ void TcpIpPort::ServerOnRead(const boost::system::error_code &ec, size_t bytes)
 {
     if(ec)
     {
-        boost::lock_guard<boost::mutex> lock(mStreamLock);
+        boost::lock_guard<boost::mutex> lock(*mpManager->GetStreamLock());
         std::cout << mName << " : ""[" << boost::this_thread::get_id() << "]" <<  "TcpIpPort ServerOnRead error: " << ec << std::endl;
         mSocket.close();
     }
@@ -233,7 +241,7 @@ void TcpIpPort::ServerOnRead(const boost::system::error_code &ec, size_t bytes)
         }
 
         {
-            boost::lock_guard<boost::mutex> lock(mStreamLock);
+            boost::lock_guard<boost::mutex> lock(*mpManager->GetStreamLock());
             std::cout << mName << " : ""[" << boost::this_thread::get_id() << "]" <<  "Server Got: " << mBuffWrite << std::endl;
         }
 
@@ -259,7 +267,7 @@ void TcpIpPort::ServerOnWrite(const boost::system::error_code &ec, size_t bytes)
 {
     if(ec)
     {
-        boost::lock_guard<boost::mutex> lock(mStreamLock);
+        boost::lock_guard<boost::mutex> lock(*mpManager->GetStreamLock());
         std::cout << mName << " : ""[" << boost::this_thread::get_id() << "]" <<  "TcpIpPort ServerOnWrite error: " << ec << std::endl;
         mSocket.close();
     }
@@ -283,7 +291,7 @@ void TcpIpPort::ServerOnWrite(const boost::system::error_code &ec, size_t bytes)
 
 inline void TcpIpPort::ReadBufferContentsToStdOut()
 {
-    boost::lock_guard<boost::mutex> lock(mStreamLock);
+    boost::lock_guard<boost::mutex> lock(*mpManager->GetStreamLock());
     std::cout << mName << " : ""[" << boost::this_thread::get_id() << "]" <<  "ReadBufferContentsToStdOut(): " << mBuffRead << std::endl;
 }
 
