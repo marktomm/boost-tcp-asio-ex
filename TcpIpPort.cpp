@@ -18,6 +18,7 @@ TcpIpPort::TcpIpPort(char* name, SocketManager* sm, PortType type, uint16_t buf_
       mBuffSize(buf_size),
       mName(name)
 {
+    // each thread needs a a separate random seed.
     srand(time(NULL));
 }
 
