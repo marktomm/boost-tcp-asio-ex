@@ -49,7 +49,6 @@ private:
 
     boost::mutex mBuffWriteLock;
     boost::mutex mBuffReadLock;
-//    boost::mutex mStreamLock;
 
     enum { max_msg = 1024 };
     char read_buffer_[max_msg];

@@ -35,13 +35,7 @@ public:
 
     SocketManager(uint16_t thread_cnt = 1);
 
-    void Start()
-    {
-        for(size_t i = 0; i < mThreadCount; ++i)
-        {
-            mIoServiceThreads->create_thread(boost::bind(&SocketManager::WorkerThreadFn, this));
-        }
-    }
+    void Start();
 
     boost::asio::io_service& GetIoService()
     {
@@ -53,15 +47,7 @@ public:
         mIoServiceThreads->join_all();
     }
 
-    void AddIoServiceThreads(uint16_t cnt)
-    {
-        mThreadCount += cnt;
-
-        for(size_t i = 0; i < cnt; ++i)
-        {
-            mIoServiceThreads->create_thread(boost::bind(&SocketManager::WorkerThreadFn, this));
-        }
-    }
+    void AddIoServiceThreads(uint16_t cnt);
 
     boost::mutex* GetStreamLock()
     {

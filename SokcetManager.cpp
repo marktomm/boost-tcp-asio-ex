@@ -39,3 +39,23 @@ void SocketManager::WorkerThreadFn()
         std::cout << "io_service run exception: " << ex.what();
     }
 }
+
+
+void SocketManager::AddIoServiceThreads(uint16_t cnt)
+{
+    mThreadCount += cnt;
+
+    for(size_t i = 0; i < cnt; ++i)
+    {
+        mIoServiceThreads->create_thread(boost::bind(&SocketManager::WorkerThreadFn, this));
+    }
+}
+
+
+void SocketManager::Start()
+{
+    for(size_t i = 0; i < mThreadCount; ++i)
+    {
+        mIoServiceThreads->create_thread(boost::bind(&SocketManager::WorkerThreadFn, this));
+    }
+}

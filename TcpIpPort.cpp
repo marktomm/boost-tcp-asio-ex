@@ -51,7 +51,7 @@ void TcpIpPort::Start()
             boost::asio::ip::tcp::endpoint endpoint = *resolver.resolve( query );
             mAcceptor.open( endpoint.protocol() );
             mAcceptor.set_option( boost::asio::ip::tcp::acceptor::reuse_address( false ) );
-            mAcceptor.bind( endpoint );
+            mAcceptor.bind( endpoint ); // bind rarely throws exception here
             mAcceptor.listen( boost::asio::socket_base::max_connections );
             mAcceptor.async_accept( mSocket, boost::bind( &TcpIpPort::OnAccept, shared_from_this(), _1) );
 
@@ -101,11 +101,8 @@ void TcpIpPort::OnConnect(const boost::system::error_code & ec)
 
 void TcpIpPort::ClientDoWrite()
 {
-    //boost::lock_guard<boost::mutex> lock(mBuffWriteLock);
-
     if(mBuffWrite.empty())
     {
-        //boost::lock_guard<boost::mutex> lock(mBuffReadLock);
         if(!mBuffRead.empty())
         {
             ReadBufferContentsToStdOut();
@@ -115,10 +112,11 @@ void TcpIpPort::ClientDoWrite()
         {
             GenerateMessage();
 
+            // Simulate fragmentary message sending from client side
             uint8_t size_to_send = rand() % mMessageLen + 1;
             mMessageLen -= size_to_send;
 
-            mSocket.async_write_some(boost::asio::buffer(mBuffWrite.c_str(), /*mBuffWrite.size()*/size_to_send),
+            mSocket.async_write_some(boost::asio::buffer(mBuffWrite.c_str(), size_to_send/*mBuffWrite.size()*/),
                                      boost::bind(&TcpIpPort::ClientOnWrite, shared_from_this(), _1, _2));
         }
     }
@@ -139,7 +137,6 @@ void TcpIpPort::ClientOnWrite(const boost::system::error_code & ec, size_t bytes
     }
     else
     {
-        //boost::lock_guard<boost::mutex> lock(mBuffWriteLock);
         mBuffWrite.erase(0, bytes);
 
         if(!mBuffWrite.empty())
@@ -155,14 +152,6 @@ void TcpIpPort::ClientOnWrite(const boost::system::error_code & ec, size_t bytes
 
 void TcpIpPort::ClientDoRead()
 {
-    //boost::lock_guard<boost::mutex> lock(mBuffReadLock);
-
-    if(!mBuffRead.empty())
-    {
-//        ReadBufferContentsToStdOut();
-        ClearReadBuffer();
-    }
-
     mSocket.async_read_some(boost::asio::buffer(read_buffer_),
                             boost::bind(&TcpIpPort::ClientOnRead, shared_from_this(), _1, _2));
 }
@@ -177,20 +166,18 @@ void TcpIpPort::ClientOnRead(const boost::system::error_code & ec, size_t bytes)
     }
     else
     {
-        //boost::lock_guard<boost::mutex> lock(mBuffReadLock);
-
-        if(!mBuffRead.empty())
-        {
-//            ReadBufferContentsToStdOut();
-            ClearReadBuffer();
-        }
 
         for(size_t i = 0; i < bytes; ++i)
         {
             mBuffRead += read_buffer_[i];
         }
 
-//        ReadBufferContentsToStdOut();
+
+        {
+            boost::lock_guard<boost::mutex> lock(*mpManager->GetStreamLock());
+            std::cout << mName << " : ""[" << boost::this_thread::get_id() << "]" <<  "Client Got: " << mBuffRead << std::endl;
+        }
+
         ClearReadBuffer();
 
         mStrand.post(boost::bind(&TcpIpPort::ClientDoWrite, shared_from_this()));
@@ -213,8 +200,6 @@ void TcpIpPort::OnAccept(const boost::system::error_code & ec)
 
 void TcpIpPort::ServerDoRead()
 {
-    //boost::lock_guard<boost::mutex> lock(mBuffReadLock);
-
     if(!mBuffRead.empty())
     {
         mBuffWrite += mBuffRead;
@@ -234,15 +219,16 @@ void TcpIpPort::ServerOnRead(const boost::system::error_code &ec, size_t bytes)
     }
     else
     {
-        //boost::lock_guard<boost::mutex> lock(mBuffWriteLock);
-        for(size_t i = 0; i < bytes; ++i)
+        mMessageLen = bytes;
+
+        for(size_t i = 0; i < mMessageLen; ++i)
         {
             mBuffWrite += read_buffer_[i];
         }
 
         {
             boost::lock_guard<boost::mutex> lock(*mpManager->GetStreamLock());
-            std::cout << mName << " : ""[" << boost::this_thread::get_id() << "]" <<  "Server Got: " << mBuffWrite << std::endl;
+//            std::cout << mName << " : ""[" << boost::this_thread::get_id() << "]" <<  "Server Got: " << mBuffWrite << std::endl;
         }
 
         mStrand.post(boost::bind(&TcpIpPort::ServerDoWrite, shared_from_this()));
@@ -252,8 +238,12 @@ void TcpIpPort::ServerOnRead(const boost::system::error_code &ec, size_t bytes)
 void TcpIpPort::ServerDoWrite()
 {
     if(!mBuffWrite.empty())
-    {
-        mSocket.async_write_some(boost::asio::buffer(mBuffWrite.c_str(), mBuffWrite.size()),
+    {   
+        // Simulate fragmentary message sending from server
+        uint8_t size_to_send = rand() % mMessageLen + 1;
+        mMessageLen -= size_to_send;
+
+        mSocket.async_write_some(boost::asio::buffer(mBuffWrite.c_str(), size_to_send/*mBuffWrite.size()*/),
                                  boost::bind(&TcpIpPort::ServerOnWrite, shared_from_this(), _1, _2));
     }
     else
@@ -273,8 +263,6 @@ void TcpIpPort::ServerOnWrite(const boost::system::error_code &ec, size_t bytes)
     }
     else
     {
-        //boost::lock_guard<boost::mutex> lock(mBuffWriteLock);
-
         mBuffWrite.erase(0, bytes);
 
         if(!mBuffWrite.empty())
