@@ -16,7 +16,9 @@ TcpIpPort::TcpIpPort(char* name, SocketManager* sm, PortType type, uint16_t buf_
       mAddress(addr),
       mPort(port),
       mBuffSize(buf_size),
-      mName(name)
+      mName(name),
+      mTimer(sm->GetIoService(), boost::posix_time::milliseconds(mDelay)),
+      mDelay(DELAY_DEFAULT)
 {
     // each thread needs a a separate random seed.
     srand(time(NULL));
@@ -24,8 +26,18 @@ TcpIpPort::TcpIpPort(char* name, SocketManager* sm, PortType type, uint16_t buf_
 
 void TcpIpPort::Start()
 {
+//    mStrand.post(boost::bind(&TcpIpPort::AsyncStart, shared_from_this()));
+    mpManager->GetIoService().post(boost::bind(&TcpIpPort::AsyncStart, shared_from_this()));
+}
+
+
+
+void TcpIpPort::AsyncStart()
+{
     try
     {
+        mTimer.expires_from_now(boost::posix_time::milliseconds(mDelay));
+
         switch(mType)
         {
         case CLIENT:
@@ -67,6 +79,8 @@ void TcpIpPort::Start()
     }
 }
 
+
+
 void TcpIpPort::GenerateMessage()
 {
     mMessageLen = rand() % 30 + 10;
@@ -90,9 +104,17 @@ void TcpIpPort::OnConnect(const boost::system::error_code & ec)
 {
     if( ec )
     {
+        {
         boost::lock_guard<boost::mutex> lock(*mpManager->GetStreamLock());
-        std::cout << mName << " : ""[" << boost::this_thread::get_id() << "]" << "TcpIpPort OnConnect error: " << ec << std::endl;
-        mSocket.close();
+        std::cout << mName << " : ""[" << boost::this_thread::get_id() << "]" << "TcpIpPort OnConnect error: " << ec
+                  << " Retry in " << mDelay/1000 << " seconds." << std::endl;
+        }
+
+        if(mDelay < DELAY_MAX)
+            mDelay *= 2;
+
+        mTimer.async_wait(boost::bind(&TcpIpPort::AsyncStart, shared_from_this()));
+//        mSocket.close();
     }
     else
     {

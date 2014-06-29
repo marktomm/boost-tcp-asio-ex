@@ -27,6 +27,12 @@ public:
         SERVER
     };
 
+    enum ConnectionDelay
+    {
+        DELAY_DEFAULT = 1000,
+        DELAY_MAX = 8000
+    };
+
 private:
 
     boost::asio::ip::tcp::socket    mSocket;
@@ -54,11 +60,15 @@ private:
     char read_buffer_[max_msg];
     char write_buffer_[max_msg];
 
+    boost::asio::deadline_timer mTimer;
+    uint16_t mDelay;
+
 public:
 
     TcpIpPort(char* name, SocketManager* sm, PortType type, uint16_t buf_size = 1024, char *addr = "127.0.0.1", uint16_t port = 80);
 
     void Start();
+    void AsyncStart();
 
     void GenerateMessage();
 
