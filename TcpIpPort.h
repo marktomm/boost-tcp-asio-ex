@@ -65,7 +65,7 @@ private:
 
 public:
 
-    TcpIpPort(char* name, SocketManager* sm, PortType type, uint16_t buf_size = 1024, char *addr = "127.0.0.1", uint16_t port = 80);
+    TcpIpPort(const char *name, SocketManager* sm, PortType type, uint16_t buf_size = 1024, char *addr = "127.0.0.1", uint16_t port = 80);
 
     void Start();
     void AsyncStart();
