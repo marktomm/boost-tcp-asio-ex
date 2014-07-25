@@ -20,7 +20,7 @@ int main()
 
     s_vector shr_vec;
 
-    for(int i = 0; i < 5000; i++)
+    for(int i = 0; i < 10000; i++)
     {
         {
             std::stringstream sss;
@@ -38,9 +38,16 @@ int main()
 
     s_manager.Start();
 
-    for(s_vector::iterator it = shr_vec.begin(); it != shr_vec.end(); ++it)
+    try
     {
-        (*it)->Start();
+        for(s_vector::iterator it = shr_vec.begin(); it != shr_vec.end(); ++it)
+        {
+            (*it)->Start();
+        }
+    }
+    catch(std::exception &e)
+    {
+        std::cout << e.what() << std::endl;
     }
 
 //    server1->Start();

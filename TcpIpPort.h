@@ -60,8 +60,9 @@ private:
     char read_buffer_[max_msg];
     char write_buffer_[max_msg];
 
-    boost::asio::deadline_timer mTimer;
     uint16_t mDelay;
+    boost::asio::deadline_timer mTimer;
+    boost::asio::deadline_timer mRoundTripTimer;
 
 public:
 
@@ -89,6 +90,8 @@ private:
     void ReadBufferContentsToStdOut();
     void ClearReadBuffer();
     void ClearWriteBuffer();
+
+    void RoundTripTimerHandler(const boost::system::error_code& ec);
 };
 
 

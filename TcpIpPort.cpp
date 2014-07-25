@@ -5,7 +5,9 @@
 #include <stdlib.h>     /* srand, rand */
 #include <time.h>       /* time */
 
+#include <stdexcept>
 
+#define ROUNDTRIP 20
 
 TcpIpPort::TcpIpPort(const char* name, SocketManager* sm, PortType type, uint16_t buf_size, char *addr, uint16_t port)
     : mSocket(sm->GetIoService()),
@@ -17,8 +19,9 @@ TcpIpPort::TcpIpPort(const char* name, SocketManager* sm, PortType type, uint16_
       mPort(port),
       mBuffSize(buf_size),
       mName(name),
+      mDelay(DELAY_DEFAULT),
       mTimer(sm->GetIoService(), boost::posix_time::milliseconds(mDelay)),
-      mDelay(DELAY_DEFAULT)
+      mRoundTripTimer(sm->GetIoService(), boost::posix_time::seconds(ROUNDTRIP))
 {
     // each thread needs a a separate random seed.
     srand(time(NULL));
@@ -102,6 +105,8 @@ void TcpIpPort::GenerateMessage()
 
 void TcpIpPort::OnConnect(const boost::system::error_code & ec)
 {
+    mRoundTripTimer.cancel();
+    mRoundTripTimer.expires_from_now(boost::posix_time::seconds(ROUNDTRIP));
     if( ec )
     {
         {
@@ -124,6 +129,9 @@ void TcpIpPort::OnConnect(const boost::system::error_code & ec)
 
 void TcpIpPort::ClientDoWrite()
 {
+    mRoundTripTimer.cancel();
+    mRoundTripTimer.expires_from_now(boost::posix_time::seconds(ROUNDTRIP));
+    mRoundTripTimer.async_wait(boost::bind(&TcpIpPort::RoundTripTimerHandler, this, _1));
     if(mBuffWrite.empty())
     {
         if(!mBuffRead.empty())
@@ -321,4 +329,26 @@ inline void TcpIpPort::ClearReadBuffer()
 inline void TcpIpPort::ClearWriteBuffer()
 {
     mBuffWrite.clear();
+}
+
+
+void TcpIpPort::RoundTripTimerHandler(const boost::system::error_code& ec)
+{
+    if(ec && ec != boost::asio::error::operation_aborted)
+    {
+        boost::lock_guard<boost::mutex> lock(*mpManager->GetStreamLock());
+        std::cout << mName << " : ""[" << boost::this_thread::get_id() << "]" <<
+                     "RoundTripTimerHandler error: " << ec.message() << std::endl;
+
+        throw std::runtime_error("RoundTrioTimerHandler failed\n");
+    }
+    else if(!ec)
+    {
+        boost::lock_guard<boost::mutex> lock(*mpManager->GetStreamLock());
+        std::cout << mName << " : ""[" << boost::this_thread::get_id() << "]" <<
+                     "RoundTripTimerHandler called: " << ROUNDTRIP << " seconds is not enough." << std::endl;
+
+        throw std::runtime_error("RoundTrioTimerHandler called\n");
+    }
+
 }
